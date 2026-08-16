@@ -40,6 +40,10 @@ pub fn main(init: std.process.Init) !void {
 
     // try stdout.print("Input range: {any}\n", .{args[1]});
 
+    // Clear terminal
+    try stdout.print("\x1b[2J\x1b[H", .{});
+    try stdout.flush();
+
     var state: State = .{};
 
     var target: u32 = 1;
@@ -60,6 +64,8 @@ pub fn main(init: std.process.Init) !void {
         state.shouldExit = true;
         state.state = .calculate;
     }
+
+    var row: u32 = 1;
 
     while (true) {
         while (state.state == .getInput) {
@@ -132,8 +138,10 @@ pub fn main(init: std.process.Init) !void {
         }
 
         while (state.state == .output) {
-            try stdout.print("\nTarget {d}\nCharges: {d} Elevation: {d:.2} Bearing: {d:.1}\n\n", .{ target, nCharges, elevation, bearing });
+            try stdout.print("\x1b[{d}H", .{row}); // Should be cross OS compatable
+            try stdout.print("Target {d:} Range: {d: <50.2}\nCharges: {d} Elevation: {d:.2} Bearing: {d:.1}\n\n", .{ target, range, nCharges, elevation, bearing });
             state.state = .getInput;
+            row += 3;
         }
 
         // INC.structLayout(INC.POI);
