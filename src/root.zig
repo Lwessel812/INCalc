@@ -3,7 +3,7 @@ const Io = std.Io;
 
 /// Calculate minimum number of charges needed for the shot
 /// Based only on range
-pub fn nCharges(range: f32) !u8 {
+pub fn nCharges(range: f32) u8 {
     const epsilon: f32 = 0.0001;
 
     if (range >= 25.0 + epsilon) {
@@ -35,7 +35,7 @@ pub fn nCharges(range: f32) !u8 {
 
 /// Calculate elevation for the gun
 /// Based only on range
-pub fn elevation(range: f32) !f32 {
+pub fn elevation(range: f32) f32 {
     const epsilon: f32 = 0.0001;
 
     if (range >= 25.0 + epsilon) {

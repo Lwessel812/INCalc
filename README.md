@@ -1,9 +1,9 @@
 # INCalc
 Iron Nest terminal calculator
 
-Download and compile with zig 0.16.0
+Compile with zig 0.16.0 or download the correct release
 
-For the first target the range and bearing can be passed in as arguments eg.
-`./INCalc.exe 12.43 156.4`
+For single target the bearing and range can be passed in as arguments eg.
+`./INCalc.exe 123.4 12.34`
 
-Bearing is optional, same as in game
+For multiple targets run with no arguments

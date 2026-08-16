@@ -5,14 +5,14 @@ const INC = @import("INCalc");
 
 const State = struct {
     state: stateEnum = .getInput,
-    usedRangeArg: bool = false,
-    usedBearingArg: bool = false,
+    shouldExit: bool = false,
 };
 
 const stateEnum = enum {
     getInput,
     calculate,
     output,
+    exit,
 };
 
 pub fn main(init: std.process.Init) !void {
@@ -21,10 +21,7 @@ pub fn main(init: std.process.Init) !void {
 
     const arena: std.mem.Allocator = init.arena.allocator();
 
-    const args = init.minimal.args.toSlice(arena) catch |err| {
-        std.log.err("{}\n", .{err});
-        return err;
-    };
+    const args = try init.minimal.args.toSlice(arena);
     // for (args) |arg| {
     //     std.log.info("arg: {s}", .{arg});
     // }
@@ -39,165 +36,114 @@ pub fn main(init: std.process.Init) !void {
     var stdin_file_reader: Io.File.Reader = .init(.stdin(), io, &stdin_buffer);
     const stdin = &stdin_file_reader.interface;
 
-    // stdout.print("Start of {s}\n", .{"INCalc"}) catch |err| {
-    //     std.log.err("{any}\n", .{err});
-    //     return err;
-    // };
+    // try stdout.print("Start of {s}\n", .{"INCalc"});
 
-    // stdout.print("Input range: {any}\n", .{args[1]}) catch |err| {
-    //     std.log.err("{any}\n", .{err});
-    //     return err;
-    // };
+    // try stdout.print("Input range: {any}\n", .{args[1]});
 
-    var state: State = .{ .state = .getInput };
+    var state: State = .{};
 
-    var target: u32 = 0;
+    var target: u32 = 1;
+    var range: f32 = 0.0;
+    var bearing: f32 = 0.0;
+
+    if (args.len > 1) {
+        bearing = std.fmt.parseFloat(f32, args[2]) catch |err| bearing: {
+            std.log.err("{} Input valid bearing argument [0.0:360.0]\n", .{err});
+            break :bearing 0.0;
+        };
+
+        range = std.fmt.parseFloat(f32, args[2]) catch |err| range: {
+            std.log.err("{} Input valid range argument (0.00:30.00]\n", .{err});
+            break :range 30.0;
+        };
+
+        state.shouldExit = true;
+        state.state = .calculate;
+    }
 
     while (true) {
-        state.state = .getInput;
-
-        var range: f32 = undefined;
-
         while (state.state == .getInput) {
+            bearing = 0.0;
+
+            try stdout.print("T{d} Bearing (deg): ", .{target});
+            try stdout.flush();
+
+            const rawBearingInputOpt = try stdin.takeDelimiter('\n');
+            const rawBearingInput = rawBearingInputOpt.?;
+            // std.debug.print("raw: {s}\n", .{rawBearingInput});
+
+            var cleanBearingInput: []const u8 = "0.0";
+
+            cleanBearingInput = std.mem.trim(u8, rawBearingInput, "\r");
+            // std.debug.print("cleaned: {s}\n", .{cleanBearingInput});
+
+            if (cleanBearingInput.len == 0) {
+                cleanBearingInput = "0.0";
+            }
+
+            bearing = try std.fmt.parseFloat(f32, cleanBearingInput);
+
             range = 0.0;
 
-            if (args.len >= 2 and state.usedRangeArg == false) {
-                range = std.fmt.parseFloat(f32, args[1]) catch |err| {
-                    std.log.err("{}\n", .{err});
-                    return err;
-                };
+            try stdout.print("T{d} Range (km): ", .{target});
+            try stdout.flush();
 
-                state.usedRangeArg = true;
-            } else {
-                stdout.print("T{d} Range (km): ", .{target}) catch |err| {
-                    std.log.err("{}\n", .{err});
-                    return err;
-                };
+            const rawRangeInputOpt = try stdin.takeDelimiter('\n');
+            const rawRangeInput = rawRangeInputOpt.?;
+            // std.debug.print("raw: {s}\n", .{rawRangeInput});
 
-                stdout.flush() catch |err| {
-                    std.log.err("{}\n", .{err});
-                    return err;
-                };
+            const cleanRangeInput = std.mem.trim(u8, rawRangeInput, "\r");
+            // std.debug.print("cleaned: {s}\n", .{cleanRangeInput});
 
-                const rawInputOpt = stdin.takeDelimiter('\n') catch |err| {
-                    std.log.err("{}\n", .{err});
-                    return err;
-                };
-                const rawInput = rawInputOpt.?;
-                // std.debug.print("raw: {s}\n", .{rawInput});
-
-                const cleanInput = std.mem.trim(u8, rawInput, "\r");
-                // std.debug.print("cleaned: {s}\n", .{cleanInput});
-
-                range = std.fmt.parseFloat(f32, cleanInput) catch |err| {
-                    std.log.err("{}\n", .{err});
-                    return err;
-                };
-            }
+            range = try std.fmt.parseFloat(f32, cleanRangeInput);
 
             state.state = .calculate;
 
+            if (bearing < 0) {
+                std.log.err("Bearing is negative, please input a valid bearing [0.0:360.0].", .{});
+                state.state = .getInput;
+            }
+
+            if (bearing > 360.0) {
+                std.log.err("Bearing is greater than 360, please input a bearing [0.0:360].", .{});
+                range = 0.0;
+                state.state = .getInput;
+            }
+
             if (range <= 0) {
-                std.log.err("Range is zero or negative, please input a valid range [0:30].", .{});
+                std.log.err("Range is zero or negative, please input a valid range (0.00:30.00].", .{});
                 state.state = .getInput;
             }
 
             if (range > 30.0) {
-                std.log.err("Range is greater than 30, please input a valid range [0:30].", .{});
+                std.log.err("Range is greater than 30, please input a valid range (0.00:30.00].", .{});
                 range = 0.0;
                 state.state = .getInput;
             }
         }
 
-        var bearing: f32 = 0.0;
+        var nCharges: u8 = 0;
+        var elevation: f32 = 0.0;
 
-        if (args.len >= 3 and state.usedBearingArg == false) {
-            bearing = std.fmt.parseFloat(f32, args[2]) catch |err| {
-                std.log.err("{}\n", .{err});
-                return err;
-            };
-
-            state.usedBearingArg = true;
-        } else {
-            stdout.print("T{d} Bearing (deg): ", .{target}) catch |err| {
-                std.log.err("{}\n", .{err});
-                return err;
-            };
-
-            stdout.flush() catch |err| {
-                std.log.err("{}\n", .{err});
-                return err;
-            };
-
-            const rawInputOpt = stdin.takeDelimiter('\n') catch |err| {
-                std.log.err("{}\n", .{err});
-                return err;
-            };
-            const rawInput = rawInputOpt.?;
-            // std.debug.print("raw: {s}\n", .{rawInput});
-
-            var cleanInput: []const u8 = "0.0";
-
-            cleanInput = std.mem.trim(u8, rawInput, "\r");
-            // std.debug.print("cleaned: {s}\n", .{cleanInput});
-
-            if (cleanInput.len == 0) {
-                cleanInput = "0.0";
-            }
-
-            bearing = std.fmt.parseFloat(f32, cleanInput) catch |err| {
-                std.log.err("{}\n", .{err});
-                return err;
-            };
+        while (state.state == .calculate) {
+            nCharges = INC.nCharges(range);
+            elevation = INC.elevation(range);
+            state.state = .output;
         }
 
-        state.state = .calculate;
-
-        const nCharges: u8 = INC.nCharges(range) catch |err| {
-            std.log.err("{}\n", .{err});
-            return err;
-        };
-
-        const elevation: f32 = INC.elevation(range) catch |err| {
-            std.log.err("{}\n", .{err});
-            return err;
-        };
-
-        state.state = .output;
-
-        stdout.print("\nTarget {d}\n", .{target}) catch |err| {
-            std.log.err("{}\n", .{err});
-            return err;
-        };
-
-        stdout.print("Charges: {d} ", .{nCharges}) catch |err| {
-            std.log.err("{}\n", .{err});
-            return err;
-        };
-
-        stdout.print("Elevation: {d:.2} ", .{elevation}) catch |err| {
-            std.log.err("{}\n", .{err});
-            return err;
-        };
-
-        if (bearing != 0.0) {
-            stdout.print("Bearing: {d:.2}", .{bearing}) catch |err| {
-                std.log.err("{}\n", .{err});
-                return err;
-            };
+        while (state.state == .output) {
+            try stdout.print("\nTarget {d}\nCharges: {d} Elevation: {d:.2} Bearing: {d:.1}\n\n", .{ target, nCharges, elevation, bearing });
+            state.state = .getInput;
         }
-
-        stdout.print("\n\n", .{}) catch |err| {
-            std.log.err("{}\n", .{err});
-            return err;
-        };
 
         // INC.structLayout(INC.POI);
+        // INC.structLayout(State);
 
-        stdout.flush() catch |err| {
-            std.log.err("{}\n", .{err});
-            return err;
-        };
+        try stdout.flush();
+
+        if (state.shouldExit == true) {
+            break;
+        }
 
         target += 1;
     }
